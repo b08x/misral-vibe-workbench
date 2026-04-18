@@ -2,7 +2,8 @@ import {
   VibeWorkspace, 
   QuestionModule, 
   QuestionSection, 
-  Question 
+  Question,
+  FollowUp
 } from '../../types';
 
 export class QuestionNavigator {
@@ -15,32 +16,63 @@ export class QuestionNavigator {
   }
 
   getCurrentQuestion(): Question | null {
-    if (!this.workspace.meta.currentSection) {
-      this.workspace.meta.currentSection = this.module.sections[0].id;
-    }
+    const allVisible = this.getVisibleQuestions();
+    const unanswered = allVisible.find(q => this.workspace.session.answers[q.id] === undefined);
     
-    const sectionIndex = this.module.sections.findIndex(s => s.id === this.workspace.meta.currentSection);
-    const section = this.module.sections[sectionIndex];
-    
-    if (!section) return null;
-
-    // Find first unanswered question in current section
-    const unansweredInCurrent = section.questions.find(q => this.workspace.session.answers[q.id] === undefined);
-    
-    if (unansweredInCurrent) {
-        this.workspace.meta.currentQuestion = unansweredInCurrent.id;
-        return unansweredInCurrent;
-    }
-
-    // Move to next section
-    const nextSection = this.module.sections[sectionIndex + 1];
-    if (nextSection) {
-        this.workspace.meta.currentSection = nextSection.id;
-        this.workspace.meta.currentQuestion = nextSection.questions[0].id;
-        return nextSection.questions[0];
+    if (unanswered) {
+      // Find which section this question belongs to for meta tracking
+      const section = this.module.sections.find(s => {
+        return s.questions.some(sq => this.isQuestionInTree(sq, unanswered.id));
+      });
+      
+      if (section) {
+        this.workspace.meta.currentSection = section.id;
+      }
+      this.workspace.meta.currentQuestion = unanswered.id;
+      return unanswered;
     }
 
-    return null; // All sections complete
+    return null; // All visible questions answered
+  }
+
+  private isQuestionInTree(root: Question, targetId: string): boolean {
+    if (root.id === targetId) return true;
+    if (root.follow_ups) {
+      for (const fu of root.follow_ups) {
+        if (fu.questions.some(fq => this.isQuestionInTree(fq, targetId))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private getVisibleQuestions(): Question[] {
+    const questions: Question[] = [];
+    for (const section of this.module.sections) {
+      if (!section.show_if || section.show_if(this.workspace.session.answers)) {
+        for (const q of section.questions) {
+          questions.push(...this.getQuestionAndVisibleFollowUps(q));
+        }
+      }
+    }
+    return questions;
+  }
+
+  private getQuestionAndVisibleFollowUps(q: Question): Question[] {
+    const result: Question[] = [q];
+    const answer = this.workspace.session.answers[q.id];
+    
+    if (answer !== undefined && q.follow_ups) {
+      for (const fu of q.follow_ups) {
+        if (fu.condition(answer, this.workspace)) {
+          for (const fq of fu.questions) {
+            result.push(...this.getQuestionAndVisibleFollowUps(fq));
+          }
+        }
+      }
+    }
+    return result;
   }
 
   next(answer: any): Question | null {
@@ -72,19 +104,14 @@ export class QuestionNavigator {
   }
 
   getProgress() {
+    const visible = this.getVisibleQuestions();
+    const answeredCount = visible.filter(q => this.workspace.session.answers[q.id] !== undefined).length;
+    
     return {
-      answered: this.workspace.meta.questionsAnswered,
-      total: this.getTotalQuestions(),
-      percentage: Math.round((this.workspace.meta.questionsAnswered / this.getTotalQuestions()) * 100)
+      answered: answeredCount,
+      total: visible.length,
+      percentage: visible.length > 0 ? Math.round((answeredCount / visible.length) * 100) : 100
     };
-  }
-
-  private getTotalQuestions(): number {
-      let total = 0;
-      for (const section of this.module.sections) {
-          total += section.questions.length;
-      }
-      return total;
   }
 
   isComplete(): boolean {

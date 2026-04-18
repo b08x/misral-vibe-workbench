@@ -187,10 +187,58 @@ export interface ValidationWarning {
 export interface AgentConfigState {
   agent_name: string | null;
   agent_purpose: string | null;
+  agent_type: 'general-purpose' | 'explore' | 'code-reviewer' | 'agentic-software-engineer' | null;
+  agent_version: string | null;
   model_provider: ModelProviderType | null;
   model_name: string | null;
   temperature: number | null;
   provider_config: ProviderConfig | null;
+  capabilities: {
+    read: boolean;
+    write: boolean;
+    bash: boolean;
+    web: boolean;
+    vision: boolean;
+  } | null;
+  context_settings: {
+    max_tokens: number;
+    temperature: number;
+    top_p: number;
+  } | null;
+  safety_settings: {
+    require_confirmation: boolean;
+    allow_destructive: boolean;
+    sandbox_mode: boolean;
+    allowed_dirs: string[];
+  } | null;
+  output_settings: {
+    format: 'markdown' | 'json' | 'plain';
+    verbose: boolean;
+    show_thinking: boolean;
+  } | null;
+  mcp_servers: Array<{
+    name: string;
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+  }> | null;
+  env_settings: {
+    llm_api_key_var: string;
+    llm_model: string;
+    llm_base_url: string | null;
+    project_root: string;
+    project_type: string;
+    debug: boolean;
+    verbose: boolean;
+  } | null;
+  session_settings: {
+    persist: boolean;
+    storage_path: string;
+    max_history: number;
+    checkpoint_enabled: boolean;
+    checkpoint_interval: number;
+  } | null;
+  extends_template: string | null;
   needs_custom_prompt: boolean | null;
   system_prompt_id: string | null;
   custom_prompt_content: string | null;

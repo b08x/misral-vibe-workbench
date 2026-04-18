@@ -42,18 +42,38 @@
         },
         "Novelty Injection": {
           "register": "none",
-          "directive": "Follow mistral-vibe TOML structure exactly. Do not invent new configuration sections or keys.",
-          "failure_mode": "Custom keys that mistral-vibe cannot parse.",
-          "self_check": "Is every key in this TOML documented in mistral-vibe specs?"
+          "directive": "Follow mistral-vibe TOML structure exactly. Do not invent new configuration sections or keys. MCP server blocks are especially high-risk: only generate [mcp.servers.<name>] blocks for servers the user explicitly confirmed. Do not invent server names, commands, or args. If no MCP servers were confirmed, omit the section entirely. NEGATIVE EXAMPLE — do not generate: [mcp.servers.graphify] command = 'python3' args = ['-m', 'graphify.serve'] unless 'graphify' was explicitly named by the user.",
+          "failure_mode": "Hallucinated MCP server configurations or invented TOML sections that mistral-vibe cannot parse.",
+          "self_check": "Is every [mcp.servers.*] block traceable to a user-confirmed tool name? Is every key in this TOML documented in the agent-template schema?"
         }
       },
       "pass_through_unchanged": ["Narrative / Logical Progression", "Perspective Stability", "Repetition / Structural Anchoring"],
       "validation_rules": [
         "TOML syntax must be valid (parseable by @iarna/toml)",
-        "active_model must be a non-empty string",
-        "All tool names in disabled_tools must match built-in tools",
+        "active_model must be a non-empty string referencing a configured model",
+        "All tool names in disabled_tools must match built-in tools: bash, read_file, write_file, search_replace, grep, ask_user_question",
         "All tool permission values must be: always | ask | deny",
-        "All timeout values must be positive integers"
+        "All timeout values must be positive integers",
+        "[agent.capabilities] values must all be boolean",
+        "[agent.context].temperature must be a float between 0.0 and 2.0",
+        "[agent.context].top_p must be a float between 0.0 and 1.0",
+        "[agent.safety].allowed_dirs must be an array of strings (empty array = unrestricted)",
+        "[agent.output].format must be one of: markdown | json | plain",
+        "[mcp.servers.*].command must be a non-empty string if the section is present",
+        "[session].storage_path must be a non-empty string if persist = true",
+        "agent.type must be one of: general-purpose | explore | code-reviewer | agentic-software-engineer"
+      ],
+      "recommended_sections": [
+        "[agent] — Core Identity (name, type, version)",
+        "[agent.capabilities] — Tool Access Flags (read, write, bash, web, vision)",
+        "[agent.context] — Sampling Parameters (max_tokens, temperature, top_p)",
+        "[agent.tools] — Allowed Tools Array",
+        "[agent.safety] — Guardrails (require_confirmation, allow_destructive, sandbox_mode, allowed_dirs)",
+        "[agent.output] — Output Formatting (format, verbose, show_thinking)",
+        "[mcp.servers.*] — MCP Tool Integration Blocks (conditional: only if MCP tools answered yes)",
+        "[env] — Runtime Environment Variables (LLM_API_KEY, LLM_MODEL, PROJECT_ROOT, PROJECT_TYPE)",
+        "[session] — State Persistence (persist, storage_path, max_history)",
+        "[session.checkpoint] — Checkpoint Config (enabled, interval)"
       ]
     },
 
