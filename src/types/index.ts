@@ -308,7 +308,18 @@ export interface WorkflowStep {
 
 export interface SystemPromptState {
   prompt_id: string | null;
+  prompt_name: string | null;
+  prompt_version: string | null;
+  prompt_category: 'extraction' | 'analysis' | 'generation' |
+                   'classification' | 'transformation' | 'validation' | null;
   prompt_purpose: string | null;
+  prompt_parameters: {
+    temperature: number;
+    max_tokens: number;
+    top_p: number;
+    stop_sequences: string[];
+  } | null;
+  prompt_variables: Record<string, string> | null;
   expert_domains: string[] | null;
   technical_depth: 'beginner' | 'intermediate' | 'expert' | null;
   communication_style: 'professional' | 'conversational' | 'technical' | 'educational' | 'socratic' | null;
@@ -318,8 +329,18 @@ export interface SystemPromptState {
   has_priorities: boolean | null;
   priorities: string[] | null;
   has_examples: boolean | null;
+  few_shot_examples: Array<{
+    input: string;
+    output: string;
+  }> | null;
   good_examples: string | null;
   bad_examples: string | null;
+  validation_required: string[] | null;
+  validation_checks: Array<{
+    variable: string;
+    regex: string;
+    message: string;
+  }> | null;
 }
 
 export interface ToolConfigState {

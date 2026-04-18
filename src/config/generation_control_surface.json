@@ -122,9 +122,9 @@
       "dimensions": {
         "Abstraction Level": {
           "register": "moderate",
-          "directive": "Expertise section can synthesize domain knowledge thematically. Communication and Behavioral sections must be concrete and actionable.",
-          "failure_mode": "Prompt describes the agent's philosophical essence but not how it behaves.",
-          "self_check": "Does each section translate to observable agent behavior?"
+          "directive": "TOML metadata blocks ([prompt], [prompt.parameters], [prompt.variables], [validation]) must be concrete and literal — no abstractions, no placeholder strings like '<value>'. Markdown body sections (## System Message, ## Template Body) may use moderate abstraction where the system role is synthesized thematically. The [prompt.variables] block defines typed placeholders; each variable must have a declared type (string | array | boolean | integer). The [[examples]] blocks must contain actual input/output pairs, not descriptions of what examples would look like.",
+          "failure_mode": "TOML blocks with abstract or placeholder values. Variables declared without types. Examples that describe themselves rather than demonstrating the prompt.",
+          "self_check": "Can each TOML value be parsed literally? Does each example pair contain real content that could be used as a few-shot demonstration?"
         },
         "Imagery Density": {
           "register": "moderate",
@@ -140,9 +140,9 @@
         },
         "Novelty Injection": {
           "register": "controlled",
-          "directive": "Express expertise distinctly but within domain conventions. One organizing frame for the entire prompt.",
-          "failure_mode": "Each section introduces a new framing; the prompt has no coherent identity.",
-          "self_check": "How many distinct conceptual frames does this prompt contain? (Should be 1-2 max.)"
+          "directive": "Express the agent's expertise distinctly in the ## System Message section. Variable names in [prompt.variables] must follow snake_case and be referenced consistently as {{variable_name}} in the markdown body. Do not invent variable types beyond: string | array | boolean | integer. Category values in [prompt] must be one of: extraction | analysis | generation | classification | transformation | validation.",
+          "failure_mode": "Invented variable types. Category values not in the defined enum. Variable names used in the body that do not appear in [prompt.variables].",
+          "self_check": "Is every {{variable}} in the markdown body declared in [prompt.variables]? Are all category and type values from the allowed lists?"
         },
         "Perspective Stability": {
           "register": "first-person-professional",
@@ -151,8 +151,32 @@
           "self_check": "Is the first-person voice consistent throughout?"
         }
       },
-      "pass_through_unchanged": ["Narrative / Logical Progression", "Repetition / Structural Anchoring", "Constraint Adherence"],
-      "recommended_sections": ["## Identity & Role", "## Expertise", "## Communication Approach", "## Constraints", "## Priorities"]
+      "validation_rules": [
+        "TOML blocks must be valid and parseable",
+        "[prompt].name must be kebab-case",
+        "[prompt].version must be valid semver",
+        "[prompt].category must be one of: extraction | analysis | generation | classification | transformation | validation",
+        "[prompt.parameters].temperature must be float between 0.0 and 2.0",
+        "[prompt.parameters].max_tokens must be a positive integer",
+        "[prompt.parameters].stop_sequences must be an array (can be empty [])",
+        "All variables declared in [prompt.variables] must appear in the template body as {{variable_name}}",
+        "All {{variable_name}} references in the template body must be declared in [prompt.variables]",
+        "[[examples]] entries must have both 'input' and 'output' fields",
+        "[validation].required must be an array of variable names",
+        "[[validation.checks]] entries must have: variable, regex, message fields",
+        "Regex values in [[validation.checks]] must be valid regex syntax"
+      ],
+      "recommended_sections": [
+        "[prompt] — Metadata Block (name, version, description, category)",
+        "[prompt.parameters] — Generation Parameters (temperature, max_tokens, top_p, stop_sequences)",
+        "[prompt.variables] — Placeholder Definitions (typed variable declarations)",
+        "## System Message — Role declaration and primary objective",
+        "## Constraints — Behavioral guardrails (bulleted list)",
+        "## Output Format — Response structure instruction",
+        "## Template Body — Context, Request, and Inputs placeholders",
+        "[[examples]] — Few-Shot Example Pairs (input/output TOML tables)",
+        "[validation] — Variable Validation Rules (required fields, regex checks)"
+      ]
     }
   },
 

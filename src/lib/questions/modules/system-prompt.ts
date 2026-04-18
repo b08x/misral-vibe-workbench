@@ -7,106 +7,161 @@ export const systemPromptModule: QuestionModule = {
   entity_type: 'system-prompt',
   sections: [
     {
-      id: 'identity',
-      title: 'Agent Identity',
+      id: 'metadata',
+      title: 'Prompt Metadata',
       questions: [
         {
-          id: 'prompt_id',
-          prompt: 'What is the unique ID for this system prompt?',
-          help_text: 'Use kebab-case (e.g., custom-prompt)',
+          id: 'prompt_name',
+          prompt: "What is this prompt's identifier?",
+          help_text: "Use kebab-case, e.g. 'code-review-prompt'",
           type: 'text',
           required: true,
-          placeholder: 'security-reviewer'
+          placeholder: 'my-extraction-prompt'
         },
         {
+          id: 'prompt_category',
+          prompt: "What category best describes this prompt's task?",
+          type: 'select',
+          required: true,
+          config: {
+            options: [
+              { value: 'extraction', label: 'Extraction' },
+              { value: 'analysis', label: 'Analysis' },
+              { value: 'generation', label: 'Generation' },
+              { value: 'classification', label: 'Classification' },
+              { value: 'transformation', label: 'Transformation' },
+              { value: 'validation', label: 'Validation' }
+            ]
+          }
+        },
+        {
+          id: 'prompt_version',
+          prompt: 'Version string',
+          type: 'text',
+          required: false,
+          default_value: '1.0.0'
+        }
+      ]
+    },
+    {
+      id: 'variables',
+      title: 'Template Variables',
+      questions: [
+        {
+          id: 'prompt_variables',
+          prompt: 'What named placeholders does this prompt need? List each with its type.',
+          help_text: 'Example: codebase_context: string, target_symbols: array',
+          type: 'textarea',
+          required: true,
+          multiline: true,
+          placeholder: 'codebase_context: string\ntarget_symbols: array'
+        }
+      ]
+    },
+    {
+      id: 'few-shot',
+      title: 'Few-Shot Examples',
+      questions: [
+        {
+          id: 'has_examples',
+          prompt: 'Do you have input/output example pairs to include?',
+          type: 'boolean',
+          required: true,
+          default_value: false
+        }
+      ]
+    },
+    {
+      id: 'validation',
+      title: 'Validation Rules',
+      questions: [
+        {
+          id: 'has_validation',
+          prompt: 'Should any variables be required or validated with a regex?',
+          type: 'boolean',
+          required: true,
+          default_value: false
+        }
+      ]
+    },
+    {
+      id: 'parameters',
+      title: 'Generation Parameters',
+      questions: [
+        {
+          id: 'generation_temperature',
+          prompt: 'What temperature should this prompt use?',
+          help_text: '0.0–2.0, default 0.5',
+          type: 'text',
+          required: false,
+          placeholder: '0.5'
+        },
+        {
+          id: 'generation_max_tokens',
+          prompt: 'Maximum tokens for responses?',
+          help_text: 'default 4096',
+          type: 'text',
+          required: false,
+          placeholder: '4096'
+        }
+      ]
+    },
+    {
+      id: 'legacy-identity',
+      title: 'Core Identity (Legacy support)',
+      questions: [
+        {
           id: 'prompt_purpose',
-          prompt: 'What is the purpose of this custom prompt?',
-          help_text: 'What kind of agent or identity should this define?',
+          prompt: 'Define the primary objective of this prompt in one sentence.',
           type: 'textarea',
           required: true,
           multiline: true
-        }
-      ]
-    },
-    {
-      id: 'expertise',
-      title: 'Expertise & Knowledge',
-      questions: [
-        {
-          id: 'expert_domains',
-          prompt: 'Which domains should the agent be an expert in?',
-          type: 'list',
-          required: true,
-          placeholder: 'Enter relevant expertise areas'
         },
         {
-          id: 'technical_depth',
-          prompt: 'What is the expected technical depth?',
-          type: 'select',
-          required: true,
-          config: {
-            options: [
-              { value: 'beginner', label: 'Beginner (Tutorial-like explanations)' },
-              { value: 'intermediate', label: 'Intermediate (Standard professional terminology)' },
-              { value: 'expert', label: 'Expert (Deep technical jargon, advanced concepts)' }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      id: 'behavior',
-      title: 'Communication & Behavior',
-      questions: [
+          id: 'expert_domains',
+          prompt: 'Which domains should the persona be an expert in?',
+          type: 'list',
+          required: true
+        },
         {
           id: 'communication_style',
-          prompt: 'Which communication style should the agent use?',
+          prompt: 'Style of communication?',
           type: 'select',
           required: true,
           config: {
             options: [
-              { value: 'professional', label: 'Professional (Concise, polite, direct)' },
-              { value: 'conversational', label: 'Conversational (Friendly, relaxed, approachable)' },
-              { value: 'technical', label: 'Technical (Precise, objective, formal)' },
-              { value: 'socratic', label: 'Socratic (Ask questions to guide the user)' }
+              { value: 'professional', label: 'Professional' },
+              { value: 'conversational', label: 'Conversational' },
+              { value: 'technical', label: 'Technical' },
+              { value: 'socratic', label: 'Socratic' }
             ]
           }
         },
         {
           id: 'response_format',
-          prompt: 'What should be the primary response format?',
+          prompt: 'Primary response format?',
           type: 'select',
           required: true,
           config: {
             options: [
-              { value: 'concise', label: 'Concise (Brief summaries)' },
-              { value: 'detailed', label: 'Detailed (Full explanations, code snippets)' },
-              { value: 'step-by-step', label: 'Step-by-Step (Clear numbered procedures)' },
-              { value: 'analytical', label: 'Analytical (Comparison, pros/cons, trade-offs)' }
+              { value: 'concise', label: 'Concise' },
+              { value: 'detailed', label: 'Detailed' },
+              { value: 'step-by-step', label: 'Step-by-Step' },
+              { value: 'analytical', label: 'Analytical' }
             ]
           }
         }
       ]
     },
     {
-      id: 'constraints',
-      title: 'Behavioral Constraints',
+      id: 'legacy-constraints',
+      title: 'Constraints (Legacy support)',
       questions: [
         {
           id: 'constraints',
-          prompt: 'Which behaviors are strictly forbidden?',
-          help_text: 'List specific things the agent should NOT do.',
+          prompt: 'Behavioral constraints?',
           type: 'list',
-          required: false,
-          placeholder: 'Never delete files without asking, Never share API keys, etc.'
-        },
-        {
-          id: 'priorities',
-          prompt: 'What are the agent\'s top priorities?',
-          help_text: 'List the order of importance for its actions.',
-          type: 'list',
-          required: false,
-          placeholder: 'Accuracy, Security, Clarity, Efficiency'
+          required: false
         }
       ]
     }
