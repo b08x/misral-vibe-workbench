@@ -24,7 +24,7 @@ export interface VibeWorkspace {
 export interface WorkspaceMeta {
   entityType: 'agent' | 'skill' | 'system-prompt' | 'tool' | 'subagent';
   outputFormat: 'toml' | 'markdown' | 'yaml';
-  status: 'entity-selection' | 'questions' | 'review' | 'generation-config' | 'component-preview' | 'generating' | 'complete' | 'error';
+  status: 'entity-selection' | 'import' | 'questions' | 'review' | 'generation-config' | 'component-preview' | 'generating' | 'complete' | 'error';
   currentSection: string | null;
   currentQuestion: string | null;
   questionsAnswered: number;
@@ -33,6 +33,8 @@ export interface WorkspaceMeta {
   createdAt: Date;
   lastModifiedAt: Date;
   generatedAt: Date | null;
+  import_source?: ImportSource;
+  pending_import_provider?: SourceProvider;
 }
 
 export interface SessionState {
@@ -552,3 +554,81 @@ export const BUILT_IN_TOOLS = [
   'grep',
   'ask_user_question'
 ] as const;
+
+// ============================================================================
+// IMPORT FEATURE — TYPE EXTENSIONS
+// Append to src/types/index.ts after existing definitions
+// ============================================================================
+
+export type SourceProvider = 'claude-code' | 'gemini-cli' | 'hermes-agent';
+
+export type SkillFileRole = 
+  | 'entrypoint' 
+  | 'reference' 
+  | 'template' 
+  | 'script' 
+  | 'asset' 
+  | 'example' 
+  | 'workflow' 
+  | 'unknown';
+
+export interface SkillFile {
+  relative_path: string;
+  content: string;
+  role: SkillFileRole;
+  size_chars: number;
+  is_binary: boolean;
+}
+
+export interface ImportConflict {
+  field_name: string;
+  source_value: any;
+  reason: string;
+  suggested_action: string;
+  resolution: 'pending' | 'accepted' | 'dismissed';
+}
+
+export interface ImportedBundle {
+  source_provider: SourceProvider;
+  detected_entity_type: 'agent' | 'skill' | 'system-prompt';
+  files: SkillFile[];
+  entrypoint: SkillFile;
+  raw_frontmatter: Record<string, any>;
+  body_text: string;
+  missing_references: string[];
+  mapped_workspace: Partial<VibeWorkspace>;
+  unmapped_fields: string[];
+  conflicts: ImportConflict[];
+  confidence: number;
+  import_warnings: string[];
+}
+
+export interface ImportSource {
+  provider: SourceProvider;
+  original_files: Array<{ path: string; role: SkillFileRole }>;
+  unmapped_fields: string[];
+  skipped_files: Array<{ path: string; reason: string }>;
+  partial_files: Array<{ path: string; extracted_items: number }>;
+}
+
+export type ImportMode = 'paste-single' | 'paste-multi' | 'manifest';
+
+export interface BundleInventoryItem {
+  file: SkillFile;
+  import_status: 'imported' | 'advisory' | 'skipped' | 'partial';
+  destination_field?: string;
+  advisory_note?: string;
+  user_action?: 'inline' | 'separate-entity' | 'ignore';
+}
+
+export const WORKFLOW_STATUSES = [
+  'entity-selection',
+  'import',
+  'questions',
+  'review',
+  'generating',
+  'complete',
+  'error'
+] as const;
+
+export type WorkflowStatus = typeof WORKFLOW_STATUSES[number];

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from '../ui';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { Bot, Zap, TextQuote, Settings2, Box, FileText, ShieldAlert } from 'lucide-react';
+import { Bot, Zap, TextQuote, Settings2, Box, FileText, ShieldAlert, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export const EntitySelectionView: React.FC = () => {
@@ -93,6 +93,47 @@ export const EntitySelectionView: React.FC = () => {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-12 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div className="w-full border-t border-[#28282b]"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase font-mono tracking-widest">
+            <span className="bg-bg-deep px-4 text-text-dim">or import from an existing agent tool</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => updateWorkspace({ meta: { status: 'import', pending_import_provider: 'claude-code' } as any })}
+            className="border-[#28282b] bg-bg-surface/30 hover:bg-bg-elevated hover:border-orange-500/30 group"
+          >
+            <Box className="w-3 h-3 mr-2 text-orange-500 group-hover:scale-110 transition-transform" />
+            Claude Code
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => updateWorkspace({ meta: { status: 'import', pending_import_provider: 'gemini-cli' } as any })}
+            className="border-[#28282b] bg-bg-surface/30 hover:bg-bg-elevated hover:border-blue-500/30 group"
+          >
+            <Sparkles className="w-3 h-3 mr-2 text-blue-500 group-hover:scale-110 transition-transform" />
+            Gemini CLI
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => updateWorkspace({ meta: { status: 'import', pending_import_provider: 'hermes-agent' } as any })}
+            className="border-[#28282b] bg-bg-surface/30 hover:bg-bg-elevated hover:border-purple-500/30 group"
+          >
+            <ShieldAlert className="w-3 h-3 mr-2 text-purple-500 group-hover:scale-110 transition-transform" />
+            Hermes Agent
+          </Button>
+        </div>
       </div>
 
       <div className="mt-16 p-8 border border-[#28282b] rounded-xl bg-bg-surface/30 backdrop-blur-sm relative overflow-hidden group">

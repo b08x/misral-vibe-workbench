@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Textarea } from '../ui';
-import { ArrowLeft, Play, Edit2, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Textarea, Alert, AlertDescription, Badge } from '../ui';
+import { ArrowLeft, Play, Edit2, CheckCircle, Info, ChevronDown, ChevronUp, FileCode, Tag } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 export const ReviewView: React.FC = () => {
   const { workspace, updateWorkspace } = useWorkspace();
@@ -15,8 +16,72 @@ export const ReviewView: React.FC = () => {
     updateWorkspace({ session: { ...workspace.session, answers: nextAnswers } });
   };
 
+  const ImportProvenanceBanner: React.FC = () => {
+    const [expanded, setExpanded] = useState(false);
+    
+    if (!workspace.meta.import_source) return null;
+    
+    const { provider, skipped_files, unmapped_fields } = workspace.meta.import_source;
+    const providerName = provider.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+
+    return (
+      <Alert className="mb-6 bg-muted/30 border-[#28282b] overflow-hidden">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-3">
+            <Info className="h-5 w-5 text-blue-500" />
+            <div>
+              <p className="text-sm font-bold text-text-main flex items-center">
+                Imported from {providerName}
+              </p>
+              <p className="text-[11px] text-text-dim font-mono">
+                {skipped_files.length > 0 ? `${skipped_files.length} items skipped` : 'Full bundle imported'} · {unmapped_fields.length} unmapped fields
+              </p>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="h-8 px-2 text-[10px] font-mono">
+            {expanded ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
+            {expanded ? 'HIDE DETAILS' : 'VIEW DETAILS'}
+          </Button>
+        </div>
+
+        {expanded && (
+          <div className="mt-4 pt-4 border-t border-[#28282b] space-y-4 animate-in slide-in-from-top-2 duration-300">
+            {skipped_files.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-text-dim uppercase tracking-widest mb-2 flex items-center">
+                  <FileCode className="h-3 w-3 mr-1" /> Skipped Files & Assets
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {skipped_files.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded bg-bg-deep/50 border border-[#ffffff05]">
+                      <span className="text-[10px] font-mono text-text-main truncate max-w-[200px]">{f.path}</span>
+                      <Badge variant="secondary" className="text-[8px]">{f.reason}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {unmapped_fields.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-text-dim uppercase tracking-widest mb-2 flex items-center">
+                  <Tag className="h-3 w-3 mr-1" /> Unmapped Source Fields
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {unmapped_fields.map((field, i) => (
+                    <Badge key={i} variant="outline" className="text-[10px] font-mono">{field}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Alert>
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-12 px-6">
+      <ImportProvenanceBanner />
       <header className="flex justify-between items-center mb-8">
         <div>
           <Button variant="ghost" onClick={() => updateWorkspace({ meta: { ...workspace.meta, status: 'questions' } })}>

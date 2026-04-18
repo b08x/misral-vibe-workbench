@@ -142,3 +142,39 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
   )
 );
 Select.displayName = 'Select';
+
+// BADGE
+export const Badge = ({ className, variant = 'default', ...props }: React.HTMLAttributes<HTMLDivElement> & { variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }) => {
+  const variants = {
+    default: 'bg-primary text-primary-foreground',
+    secondary: 'bg-bg-elevated text-text-main border border-[#28282b]',
+    destructive: 'bg-destructive/10 text-destructive border border-destructive/20',
+    outline: 'text-text-dim border border-[#28282b]',
+    success: 'bg-green-500/10 text-green-500 border border-green-500/20',
+    warning: 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+  };
+  return (
+    <div className={cn('inline-flex items-center rounded-sm px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2', variants[variant], className)} {...props} />
+  );
+};
+
+// ACCORDION (Minimal)
+export const Accordion = ({ children, className }: { children: React.ReactNode; className?: string }) => <div className={cn("space-y-1", className)}>{children}</div>;
+export const AccordionItem = ({ children, className, ...props }: { children: React.ReactNode; className?: string; [key: string]: any }) => <div className={cn('border-b border-[#28282b] last:border-0', className)} {...props}>{children}</div>;
+export const AccordionTrigger = ({ children, onClick, isOpen }: { children: React.ReactNode; onClick?: () => void; isOpen?: boolean }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex w-full items-center justify-between py-4 font-medium transition-all hover:underline"
+  >
+    {children}
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("h-4 w-4 shrink-0 transition-transform duration-200", isOpen && "rotate-180")}>
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </button>
+);
+export const AccordionContent = ({ children, isOpen }: { children: React.ReactNode; isOpen?: boolean }) => (
+  <div className={cn("overflow-hidden text-sm transition-all pb-4", !isOpen && "hidden")}>
+    {children}
+  </div>
+);

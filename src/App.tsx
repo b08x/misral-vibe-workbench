@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
 import { SessionProvider } from './context/SessionContext';
 import { EntitySelectionView } from './components/entity-selection/EntitySelectionView';
+import { ImportView } from './components/import/ImportView';
 import { QAShell } from './components/qa/QAShell';
 import { ReviewView } from './components/review/ReviewView';
 import { GenerationView } from './components/generation/GenerationView';
@@ -28,6 +29,14 @@ const AppContent: React.FC = () => {
     switch (workspace.meta.status) {
       case 'entity-selection':
         return <EntitySelectionView />;
+      case 'import':
+        return (
+          <ImportView 
+            initialProvider={workspace.meta.pending_import_provider ?? null}
+            onImportComplete={() => updateWorkspace({ meta: { status: 'questions' } as any })} 
+            onBack={() => updateWorkspace({ meta: { status: 'entity-selection' } as any })}
+          />
+        );
       case 'questions':
         return <QAShell />;
       case 'review':
