@@ -1,3 +1,4 @@
+import { unzipSync, strFromU8 } from 'fflate';
 import { 
   SkillFile, 
   SkillFileRole, 
@@ -282,6 +283,104 @@ export function extractReferencedPaths(bodyText: string): string[] {
   }
 
   return Array.from(paths);
+}
+
+/**
+ * Extracts a SkillFile[] from a browser File object pointing to a .zip archive.
+ *
+ * - Reads the file as ArrayBuffer, passes to fflate.unzipSync
+ * - Strips macOS artifacts (__MACOSX/, .DS_Store)
+ * - Detects and strips top-level wrapper directory (GitHub zip structure)
+ * - Finds SKILL.md (required) — throws BundleParseError if absent
+ * - Converts each file's bytes to string with strFromU8; marks binary files
+ *   (strFromU8 throws) as is_binary: true, content: ''
+ * - Calls classifyFileRole for each path
+ * - Returns SkillFile[] with SKILL.md as index 0
+ *
+ * Uses async because file.arrayBuffer() is async.
+ * fflate.unzipSync is synchronous — acceptable for skill bundles (<10MB).
+ */
+export async function extractZipBundle(file: File): Promise<SkillFile[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const uint8 = new Uint8Array(arrayBuffer);
+  let unzipped: Record<string, Uint8Array>;
+  
+  try {
+    unzipped = unzipSync(uint8);
+  } catch (e) {
+    throw new BundleParseError('Failed to unzip archive. File may be corrupted.', file.name);
+  }
+
+  const paths = Object.keys(unzipped).filter(p => {
+    const isMacArtifact = p.includes('__MACOSX/') || p.endsWith('.DS_Store');
+    const isHidden = p.split('/').some(segment => segment.startsWith('.'));
+    const isDirectory = p.endsWith('/');
+    return !isMacArtifact && !isHidden && !isDirectory;
+  });
+
+  if (paths.length === 0) {
+    throw new BundleParseError('Zip archive is empty or contains only hidden files.', file.name);
+  }
+
+  // Top-level strip detection (GitHub zip structure)
+  let prefixToStrip = '';
+  const firstPath = paths[0];
+  const firstSegment = firstPath.split('/')[0];
+  
+  if (firstSegment && !firstSegment.includes('.')) {
+    const allSharePrefix = paths.every(p => p.startsWith(firstSegment + '/'));
+    if (allSharePrefix) {
+      prefixToStrip = firstSegment + '/';
+    }
+  }
+
+  const skillFiles: SkillFile[] = [];
+  let entrypointIndex = -1;
+
+  for (const path of paths) {
+    const bytes = unzipped[path];
+    const relativePath = prefixToStrip ? path.substring(prefixToStrip.length) : path;
+    
+    let content = '';
+    let is_binary = false;
+    
+    try {
+      content = strFromU8(bytes);
+    } catch (e) {
+      is_binary = true;
+      content = '';
+    }
+
+    const role = classifyFileRole(relativePath);
+    const skillFile: SkillFile = {
+      relative_path: relativePath,
+      content,
+      role,
+      size_chars: content.length,
+      is_binary
+    };
+
+    if (role === 'entrypoint' || relativePath.toLowerCase() === 'skill.md') {
+      skillFile.role = 'entrypoint';
+      skillFiles.unshift(skillFile);
+      entrypointIndex = 0;
+    } else {
+      skillFiles.push(skillFile);
+    }
+  }
+
+  // Ensure SKILL.md exists
+  const hasSkillMd = skillFiles.some(f => f.role === 'entrypoint');
+  if (!hasSkillMd) {
+    throw new BundleParseError('No SKILL.md found in zip archive root or one level deep.', file.name);
+  }
+
+  // Final sort to ensure entrypoint is at index 0 (if unshift didn't already handle it perfectly)
+  return skillFiles.sort((a, b) => {
+    if (a.role === 'entrypoint') return -1;
+    if (b.role === 'entrypoint') return 1;
+    return a.relative_path.localeCompare(b.relative_path);
+  });
 }
 
 // --- TESTS (inline, for verification only) ---

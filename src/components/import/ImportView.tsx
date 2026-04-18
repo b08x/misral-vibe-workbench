@@ -16,7 +16,11 @@ import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
-  AccordionContent
+  AccordionContent,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent
 } from '../ui';
 import { 
   SourceProvider, 
@@ -29,6 +33,8 @@ import {
   detectImportMode, 
   splitBundle, 
   extractReferencedPaths,
+  extractFrontmatter,
+  extractZipBundle,
   BundleParseError 
 } from '../../lib/import/parsers/bundle-splitter';
 import { normalizeBundle } from '../../lib/import/normalizer';
@@ -47,7 +53,13 @@ import {
   FileCode,
   FileText,
   FileBadge,
-  ArrowLeft
+  ArrowLeft,
+  Loader2,
+  Image as ImageIcon,
+  BookOpen,
+  GitBranch,
+  Upload,
+  File
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -232,6 +244,12 @@ const FileInputStep: React.FC<{ provider: SourceProvider; onParsed: (bundle: Imp
   const [additionalFiles, setAdditionalFiles] = useState<Array<{ path: string; content: string }>>([]);
   const [activeMissingPath, setActiveMissingPath] = useState<string | null>(null);
 
+  // ZIP State
+  const [zipFile, setZipFile] = useState<File | null>(null);
+  const [zipLoading, setZipLoading] = useState(false);
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [zipInventory, setZipInventory] = useState<SkillFile[] | null>(null);
+
   const mode = useMemo(() => {
     if (!content.trim()) return null;
     return detectImportMode(content);
@@ -239,8 +257,6 @@ const FileInputStep: React.FC<{ provider: SourceProvider; onParsed: (bundle: Imp
 
   const missingPaths = useMemo(() => {
     if (mode !== 'paste-single' || !content.trim()) return [];
-    // Extract body (assuming standard format or use splitter helper)
-    // For simplicity, we just use extractReferencedPaths on the whole thing if single
     return extractReferencedPaths(content);
   }, [content, mode]);
 
@@ -256,15 +272,14 @@ const FileInputStep: React.FC<{ provider: SourceProvider; onParsed: (bundle: Imp
       
       const files = splitBundle(fullText);
       const entrypoint = files[0];
+      const { frontmatter, body } = extractFrontmatter(entrypoint.content);
       
-      // Simple frontmatter/body split for normalization input
-      // In a real app, we'd reuse lib logic
       const bundle = normalizeBundle({
         provider,
         files,
-        raw_frontmatter: {}, // Normalizer will re-parse
-        body_text: entrypoint.content,
-        missing_references: [] // Normalizer will detect
+        raw_frontmatter: frontmatter,
+        body_text: body,
+        missing_references: [] 
       });
 
       onParsed(bundle);
@@ -274,10 +289,74 @@ const FileInputStep: React.FC<{ provider: SourceProvider; onParsed: (bundle: Imp
     }
   };
 
+  const handleZipSelect = async (file: File) => {
+    if (!file.name.endsWith('.zip')) {
+      setZipError('Only .zip files are supported');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setZipError('File exceeds 10MB limit');
+      return;
+    }
+    setZipLoading(true);
+    setZipError(null);
+    setZipInventory(null);
+    try {
+      const files = await extractZipBundle(file);
+      setZipInventory(files);
+      setZipFile(file);
+    } catch (e) {
+      if (e instanceof BundleParseError) setZipError(e.message);
+      else setZipError('Failed to read zip file');
+    } finally {
+      setZipLoading(false);
+    }
+  };
+
+  const handleParseZip = () => {
+    if (!zipInventory || !provider) return;
+    try {
+      const entrypoint = zipInventory.find(f => f.role === 'entrypoint')!;
+      const { frontmatter, body } = extractFrontmatter(entrypoint.content);
+      const bundle = normalizeBundle({
+        provider,
+        files: zipInventory,
+        raw_frontmatter: frontmatter,
+        body_text: body,
+        missing_references: []
+      });
+      onParsed(bundle);
+    } catch (e) {
+      setZipError('Failed to process bundle');
+    }
+  };
+
   const addFile = (path: string, fileContent: string) => {
     setAdditionalFiles([...additionalFiles, { path, content: fileContent }]);
     setActiveMissingPath(null);
   };
+
+  const getFileIcon = (role: string, isBinary: boolean) => {
+    if (isBinary) return <ImageIcon className="h-4 w-4 text-destructive" />;
+    switch (role) {
+      case 'entrypoint': return <FileCode className="h-4 w-4 text-orange-500" />;
+      case 'reference': return <FileText className="h-4 w-4 text-blue-400" />;
+      case 'template': return <FileBadge className="h-4 w-4 text-purple-400" />;
+      case 'script': return <Terminal className="h-4 w-4 text-green-400" />;
+      case 'example': return <BookOpen className="h-4 w-4 text-amber-400" />;
+      case 'workflow': return <GitBranch className="h-4 w-4 text-indigo-400" />;
+      case 'asset': return <ImageIcon className="h-4 w-4 text-text-dim" />;
+      default: return <File className="h-4 w-4 text-text-dim" />;
+    }
+  };
+
+  const zipSummary = useMemo(() => {
+    if (!zipInventory) return null;
+    const total = zipInventory.length;
+    const skipped = zipInventory.filter(f => f.is_binary || f.role === 'unknown').length;
+    const needsReview = zipInventory.filter(f => f.role === 'script').length;
+    return `${total} files ready · ${skipped} files skipped · ${needsReview} files need review`;
+  }, [zipInventory]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -292,103 +371,229 @@ const FileInputStep: React.FC<{ provider: SourceProvider; onParsed: (bundle: Imp
           </Badge>
           {mode && (
             <Badge variant="success" className="animate-pulse">
-              ● {mode === 'paste-multi' ? 'Multi-file bundle detected' : 'Single SKILL.md detected'}
+              ● {mode === 'paste-multi' ? 'Multi-file bundle' : 'Single SKILL.md'}
             </Badge>
           )}
         </div>
       </div>
 
-      <Card className="border-mistral-orange/20">
-        <CardHeader>
-          <CardTitle>Paste your skill bundle</CardTitle>
-          <CardDescription>Copy the contents of your skill directory. Use context files (CLAUDE.md, GEMINI.md, SOUL.md) to import as system prompts.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea 
-            placeholder="--- SKILL.md ---
+      <Tabs defaultValue="paste" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="paste">Paste Text</TabsTrigger>
+          <TabsTrigger value="zip">Upload ZIP</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="paste">
+          <Card className="border-mistral-orange/20">
+            <CardHeader>
+              <CardTitle>Paste your skill bundle</CardTitle>
+              <CardDescription>Copy the contents of your skill directory using the delimiter format or a single SKILL.md file.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea 
+                placeholder="--- SKILL.md ---
 name: my-skill
 ...
 "
-            className="min-h-[400px] text-[13px] font-mono leading-relaxed"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-
-          {error && (
-            <Alert variant="destructive" className="animate-in head-shake duration-300">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Parse Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {additionalFiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold text-text-dim uppercase tracking-widest">Additional Files Added</p>
-              <div className="flex flex-wrap gap-2">
-                {additionalFiles.map(f => (
-                  <Badge key={f.path} variant="outline" className="font-mono text-[10px] flex items-center pr-1">
-                    {f.path}
-                    <button 
-                      className="ml-1 hover:text-destructive" 
-                      onClick={() => setAdditionalFiles(additionalFiles.filter(x => x.path !== f.path))}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {mode === 'paste-single' && nextMissingPath && !activeMissingPath && (
-            <Button 
-              variant="outline" 
-              className="w-full border-dashed border-text-dim/30 text-text-dim hover:border-mistral-orange/50 hover:text-mistral-orange"
-              onClick={() => setActiveMissingPath(nextMissingPath)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add referenced file: {nextMissingPath}
-            </Button>
-          )}
-
-          {activeMissingPath && (
-            <div className="space-y-2 p-4 rounded-lg bg-bg-elevated border border-[#28282b] animate-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-text-main font-mono">{activeMissingPath}</span>
-                <Button variant="ghost" size="sm" onClick={() => setActiveMissingPath(null)}><X className="h-3 w-3" /></Button>
-              </div>
-              <Textarea 
-                placeholder={`Paste content for ${activeMissingPath}...`}
-                className="min-h-[150px] font-mono text-xs"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.ctrlKey) {
-                    addFile(activeMissingPath, (e.target as HTMLTextAreaElement).value);
-                  }
-                }}
-                autoFocus
+                className="min-h-[400px] text-[13px] font-mono leading-relaxed"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
               />
-              <div className="flex justify-between items-center">
-                <p className="text-[10px] text-text-dim font-mono italic">Press Ctrl+Enter to save</p>
-                <Button size="sm" onClick={(e) => {
-                  const ta = (e.currentTarget.parentElement?.previousElementSibling as HTMLTextAreaElement);
-                  addFile(activeMissingPath, ta.value);
-                }}>Add File</Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-        <CardFooter className="justify-between border-t border-[#28282b] pt-6">
-          <p className="text-xs text-text-dim italic">Delimiter format: --- filename --- followed by content</p>
-          <Button 
-            disabled={!content.trim()} 
-            onClick={handleParse}
-            className="w-48"
-          >
-            PARSE BUNDLE
-          </Button>
-        </CardFooter>
-      </Card>
+
+              {error && (
+                <Alert variant="destructive" className="animate-in head-shake duration-300">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Parse Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {additionalFiles.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-text-dim uppercase tracking-widest">Additional Files Added</p>
+                  <div className="flex flex-wrap gap-2">
+                    {additionalFiles.map(f => (
+                      <Badge key={f.path} variant="outline" className="font-mono text-[10px] flex items-center pr-1">
+                        {f.path}
+                        <button 
+                          className="ml-1 hover:text-destructive" 
+                          onClick={() => setAdditionalFiles(additionalFiles.filter(x => x.path !== f.path))}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {mode === 'paste-single' && nextMissingPath && !activeMissingPath && (
+                <Button 
+                  variant="outline" 
+                  className="w-full border-dashed border-text-dim/30 text-text-dim hover:border-mistral-orange/50 hover:text-mistral-orange"
+                  onClick={() => setActiveMissingPath(nextMissingPath)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add referenced file: {nextMissingPath}
+                </Button>
+              )}
+
+              {activeMissingPath && (
+                <div className="space-y-2 p-4 rounded-lg bg-bg-elevated border border-[#28282b] animate-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-text-main font-mono">{activeMissingPath}</span>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveMissingPath(null)}><X className="h-3 w-3" /></Button>
+                  </div>
+                  <Textarea 
+                    placeholder={`Paste content for ${activeMissingPath}...`}
+                    className="min-h-[150px] font-mono text-xs"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && e.ctrlKey) {
+                        addFile(activeMissingPath, (e.target as HTMLTextAreaElement).value);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] text-text-dim font-mono italic">Press Ctrl+Enter to save</p>
+                    <Button size="sm" onClick={(e) => {
+                      const ta = (e.currentTarget.parentElement?.previousElementSibling as HTMLTextAreaElement);
+                      addFile(activeMissingPath, ta.value);
+                    }}>Add File</Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="justify-between border-t border-[#28282b] pt-6">
+              <p className="text-xs text-text-dim italic">Delimiter format: --- filename --- followed by content</p>
+              <Button 
+                disabled={!content.trim()} 
+                onClick={handleParse}
+                className="w-48"
+              >
+                PARSE BUNDLE
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="zip">
+          <Card className="border-mistral-orange/20">
+            <CardHeader>
+              <CardTitle>Upload skill bundle ZIP</CardTitle>
+              <CardDescription>Upload a .zip archive containing your skill files. SKILL.md must be at the root or one folder deep.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!zipInventory && !zipLoading && (
+                <div 
+                  className={cn(
+                    "relative border-2 border-dashed border-[#28282b] rounded-xl p-12 flex flex-col items-center justify-center transition-all hover:bg-bg-elevated hover:border-mistral-orange/30 group",
+                    zipError && "border-destructive/50 bg-destructive/5"
+                  )}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleZipSelect(file);
+                  }}
+                  onClick={() => document.getElementById('zip-upload')?.click()}
+                >
+                  <input 
+                    id="zip-upload"
+                    type="file" 
+                    accept=".zip" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleZipSelect(file);
+                    }}
+                  />
+                  <div className="h-16 w-16 rounded-full bg-bg-elevated border border-[#28282b] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Upload className="h-8 w-8 text-mistral-orange" />
+                  </div>
+                  <h3 className="text-lg font-bold text-text-main mb-2">Drop .zip here or click to browse</h3>
+                  <p className="text-sm text-text-dim">Accepts .zip files up to 10MB</p>
+                </div>
+              )}
+
+              {zipLoading && (
+                <div className="flex flex-col items-center justify-center p-12 bg-bg-elevated rounded-xl border border-[#28282b]">
+                  <Loader2 className="h-10 w-10 text-mistral-orange animate-spin mb-4" />
+                  <p className="text-sm text-text-main font-mono">Extracting zip bundle...</p>
+                </div>
+              )}
+
+              {zipError && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Extraction Error</AlertTitle>
+                  <AlertDescription>{zipError}</AlertDescription>
+                </Alert>
+              )}
+
+              {zipInventory && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-text-main uppercase tracking-widest">Extracted Contents</h3>
+                    <Button variant="ghost" size="sm" onClick={() => { setZipInventory(null); setZipFile(null); }} className="h-7 text-[10px]">
+                      CHANGE FILE
+                    </Button>
+                  </div>
+                  
+                  <div className="border border-[#28282b] rounded-md overflow-hidden bg-black/20">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-bg-elevated border-b border-[#28282b]">
+                          <th className="p-3 font-bold text-text-dim tracking-widest uppercase text-[9px]">File Path</th>
+                          <th className="p-3 font-bold text-text-dim tracking-widest uppercase text-[9px]">Role</th>
+                          <th className="p-3 font-bold text-text-dim tracking-widest uppercase text-[9px]">Size</th>
+                          <th className="p-3 font-bold text-text-dim tracking-widest uppercase text-[9px]">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono">
+                        {zipInventory.map((f) => (
+                          <tr key={f.relative_path} className="border-b border-[#28282b]/50 hover:bg-white/5 transition-colors">
+                            <td className="p-3 flex items-center space-x-2">
+                              {getFileIcon(f.role, f.is_binary)}
+                              <span className="truncate max-w-[200px]">{f.relative_path}</span>
+                            </td>
+                            <td className="p-3">
+                              <Badge variant="outline" className="text-[9px] uppercase tracking-tighter h-5">
+                                {f.role}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-text-dim">
+                              {f.is_binary ? '—' : `${f.size_chars.toLocaleString()} chars`}
+                            </td>
+                            <td className="p-3">
+                              {f.role === 'entrypoint' ? <span className="text-green-500">✅</span> :
+                               f.is_binary ? <span className="text-destructive flex items-center" title="Binary skipped">❌ skipped</span> :
+                               f.role === 'script' ? <span className="text-amber-500 flex items-center" title="Review required">⚠️ review</span> :
+                               f.role === 'unknown' ? <span className="text-amber-500 flex items-center" title="Unknown type">⚠️ unknown</span> :
+                               <span className="text-green-500">✅</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[11px] text-text-dim italic font-mono">{zipSummary}</p>
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="justify-end border-t border-[#28282b] pt-6 gap-4">
+              <Button 
+                disabled={!zipInventory} 
+                onClick={handleParseZip}
+                className="w-64"
+              >
+                IMPORT ZIP BUNDLE
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

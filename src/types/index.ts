@@ -611,7 +611,7 @@ export interface ImportSource {
   partial_files: Array<{ path: string; extracted_items: number }>;
 }
 
-export type ImportMode = 'paste-single' | 'paste-multi' | 'manifest';
+export type ImportMode = 'paste-single' | 'paste-multi' | 'zip' | 'manifest';
 
 export interface BundleInventoryItem {
   file: SkillFile;
