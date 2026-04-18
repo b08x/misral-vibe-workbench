@@ -84,10 +84,35 @@ ${componentPreviewSchema}
     .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
     .join('\n');
 
+  let importContext = '';
+  if (workspace.meta.import_source) {
+    const src = workspace.meta.import_source;
+    const files = src.original_files.map(f => `- ${f.path} [${f.role}]`).join('\n');
+    const scripts = workspace.skillDefinition?.script_files ? Object.keys(workspace.skillDefinition.script_files).join(', ') : 'None';
+    const templates = workspace.skillDefinition?.template_files ? Object.keys(workspace.skillDefinition.template_files).join(', ') : 'None';
+    
+    importContext = `
+IMPORTANT: THIS IS AN IMPORTED ENTITY
+Source Provider: ${src.provider}
+Original Assets Found:
+${files}
+
+Templates Present: ${templates}
+Scripts Present: ${scripts}
+Unmapped Metadata: ${src.unmapped_fields.join(', ') || 'None'}
+
+ARCHITECTURAL GUIDANCE FOR IMPORT:
+1. Prioritize sections that existed in the original files where logical.
+2. If templates or scripts are present, ensure the plan includes sections for "Tooling/Integration" path or "Script Reference".
+3. Use the unmapped metadata to inform description fields or dimension hints.
+`;
+  }
+
   const user = `
 INPUT CONTEXT:
 Entity Type: ${entityType}
 Output Format: ${outputFormat}
+${importContext}
 
 USER ANSWERS:
 ${serializedAnswers}

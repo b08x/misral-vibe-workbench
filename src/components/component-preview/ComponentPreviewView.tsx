@@ -14,7 +14,7 @@ import { cn } from '../../lib/utils';
 import { PreviewSection } from '../../types';
 
 export const ComponentPreviewView: React.FC = () => {
-  const { updateWorkspace } = useWorkspace();
+  const { workspace, updateWorkspace } = useWorkspace();
   const { 
     isGenerating, error, rawResponse, preview, retry, 
     updateSection, removeSection, reorderSections, addSection, approveAndProceed 
@@ -267,6 +267,11 @@ export const ComponentPreviewView: React.FC = () => {
                 <span className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-[9px] font-mono uppercase font-bold text-primary">
                   {preview.outputFormat}
                 </span>
+                {workspace.meta.import_source && (
+                  <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] font-mono uppercase font-bold text-amber-500">
+                    Imported: {workspace.meta.import_source.provider.replace('-', ' ')}
+                  </span>
+                )}
               </div>
 
               <div>
