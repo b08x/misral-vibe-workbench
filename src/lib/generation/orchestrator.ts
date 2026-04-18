@@ -36,6 +36,8 @@ export class GenerationOrchestrator {
   }
 
   async generate(): Promise<VibeWorkspace> {
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
     // 1. PHASE: CONTEXT_GATHERING
     this.workspace.generation.currentPhase = 'context_gathering';
     const contextGatheringPrompt = this.getPrompt('context_gathering');
@@ -48,11 +50,15 @@ export class GenerationOrchestrator {
       this.workspace.generation.contextMap = { raw: contextResult.content };
     }
 
+    await delay(1000); // 1s cooldown between phases
+
     // 2. PHASE: DRAFTING
     this.workspace.generation.currentPhase = 'drafting';
     const draftingPrompt = this.getPrompt('drafting');
     const draftResult = await this.provider.generate(draftingPrompt, this.model, this.apiKey);
     this.workspace.generation.draftArtifact = draftResult.content;
+
+    await delay(1000); // 1s cooldown between phases
 
     // 3. PHASE: REVIEW
     this.workspace.generation.currentPhase = 'review';

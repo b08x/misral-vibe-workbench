@@ -1,6 +1,6 @@
 {
   "name": "mistral-vibe-workbench",
-  "description": "",
+  "description": "An immersive workbench for importing, rating, and distilling LLM conversation exports into gitagent-compatible SKILL.md artifacts using the Universal Generation Control Surface.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

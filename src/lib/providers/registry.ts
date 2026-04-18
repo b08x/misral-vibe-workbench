@@ -27,6 +27,7 @@ export abstract class ModelProvider {
       system: prompt.system,
       prompt: prompt.user,
       temperature: 0.2,
+      maxRetries: 5, // Increased from default (usually 2)
     });
 
     return {
