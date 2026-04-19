@@ -20,14 +20,21 @@ export const agentConfigModule: QuestionModule = {
         {
           id: 'agent_type',
           prompt: 'What type of agent is this?',
+          help_text: 'AGENT agents are user-selectable via --agent or the interactive cycle. SUBAGENT agents are restricted to programmatic delegation via the task tool only.',
           type: 'select',
           required: true,
           config: {
             options: [
-              { value: 'general-purpose', label: 'General Purpose' },
-              { value: 'explore', label: 'Explore' },
-              { value: 'code-reviewer', label: 'Code Reviewer' },
-              { value: 'agentic-software-engineer', label: 'Agentic Software Engineer' }
+              {
+                value: 'AGENT',
+                label: 'Agent',
+                description: 'User-selectable. Supports interactive UI and direct invocation.'
+              },
+              {
+                value: 'SUBAGENT',
+                label: 'Subagent',
+                description: 'Programmatic only. Spawned by the task tool; cannot be selected at the CLI.'
+              }
             ]
           }
         },
@@ -37,6 +44,77 @@ export const agentConfigModule: QuestionModule = {
           type: 'text',
           required: false,
           default_value: '1.0.0'
+        },
+        {
+          id: 'safety_level',
+          prompt: 'What safety posture should this agent operate under?',
+          help_text: 'Governs the Human-in-the-Loop (HITL) gate for all tool actions. Applies as the default; individual tool blocks can override via [config.tools.<name>] permission.',
+          type: 'select',
+          required: true,
+          default_value: 'NEUTRAL',
+          config: {
+            options: [
+              {
+                value: 'SAFE',
+                label: 'Safe',
+                description: 'Read-only. No write or destructive operations permitted. Use for chat or plan modes.'
+              },
+              {
+                value: 'NEUTRAL',
+                label: 'Neutral',
+                description: 'Standard profile. All system modifications require explicit ASK confirmation.'
+              },
+              {
+                value: 'DESTRUCTIVE',
+                label: 'Destructive',
+                description: 'High-velocity refactoring. File writes auto-approved; bash remains gated.'
+              },
+              {
+                value: 'YOLO',
+                label: 'YOLO',
+                description: 'All tool executions auto-approved. Intended for headless CI/CD pipelines only.'
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      id: 'model',
+      title: 'Model & Prompt',
+      questions: [
+        {
+          id: 'active_model',
+          prompt: 'Which model backend should this agent use?',
+          help_text: 'Must reference a model configured in your mistral-vibe environment. Validated against the known model list.',
+          type: 'select',
+          required: true,
+          config: {
+            options: [
+              { value: 'mistral-large-latest',  label: 'Mistral Large (Latest)',  description: 'Highest capability. Use for complex reasoning and planning agents.' },
+              { value: 'mistral-medium-latest', label: 'Mistral Medium (Latest)', description: 'Balanced performance and cost.' },
+              { value: 'mistral-small-latest',  label: 'Mistral Small (Latest)',  description: 'Lightweight. Use for focused, single-task agents.' },
+              { value: 'devstral-2',            label: 'Devstral 2',             description: 'Optimized for code generation and software engineering tasks.' },
+              { value: 'codestral-latest',      label: 'Codestral (Latest)',     description: 'Code completion and fill-in-the-middle. High velocity refactoring.' },
+              { value: 'open-mistral-nemo',     label: 'Mistral Nemo',           description: 'Open-weight. Use for local or air-gapped deployments.' }
+            ]
+          }
+        },
+        {
+          id: 'system_prompt_id',
+          prompt: 'Which system prompt template should this agent load?',
+          help_text: 'References a .md file in the prompts/ directory. The value is the filename without extension.',
+          type: 'select',
+          required: false,
+          config: {
+            options: [
+              { value: 'cli',     label: 'cli',     description: 'Default CLI-context prompt. Covers standard tool use and response formatting.' },
+              { value: 'explore', label: 'explore', description: 'Background exploration prompt. Designed for SUBAGENT isolation contexts.' },
+              { value: 'plan',    label: 'plan',    description: 'Planning mode. Read-only posture; no write tool invocations.' },
+              { value: 'review',  label: 'review',  description: 'Code review context. Structured output, diff-aware analysis.' }
+            ],
+            allow_custom: true
+          }
         }
       ]
     },
@@ -71,6 +149,44 @@ export const agentConfigModule: QuestionModule = {
               ]
             }
           ]
+        },
+        {
+          id: 'enabled_tools',
+          prompt: 'Which tools should be explicitly enabled?',
+          help_text: 'Whitelist-Takes-Precedence: if any tools are selected here, all unlisted tools are automatically disabled. Leave empty to manage access via the disabled list instead.',
+          type: 'multi-select',
+          required: false,
+          config: {
+            options: [
+              { value: 'bash',              label: 'bash',              description: 'Shell command execution. Highest risk — decomposed and validated against denylist.' },
+              { value: 'read_file',         label: 'read_file',         description: 'Read file contents from the project tree.' },
+              { value: 'write_file',        label: 'write_file',        description: 'Write or overwrite files. Pair with allowlist paths for safety.' },
+              { value: 'search_replace',    label: 'search_replace',    description: 'In-place text substitution within existing files.' },
+              { value: 'grep',              label: 'grep',              description: 'Pattern search across files.' },
+              { value: 'ask_user_question', label: 'ask_user_question', description: 'HITL prompt: pause execution and request input from the user.' },
+              { value: 'task',              label: 'task',              description: 'Delegate work to a subagent. Required for orchestrator-type agents.' }
+            ]
+          }
+        },
+        {
+          id: 'disabled_tools',
+          prompt: 'Which tools should be explicitly disabled?',
+          help_text: 'Only applies when no tools are selected in the whitelist above. If enabled_tools is populated, this field has no effect.',
+          type: 'multi-select',
+          required: false,
+          show_if: (answers: Record<string, any>) =>
+            !answers.enabled_tools || answers.enabled_tools.length === 0,
+          config: {
+            options: [
+              { value: 'bash',              label: 'bash',              description: 'Prevent all shell execution.' },
+              { value: 'read_file',         label: 'read_file',         description: 'Prevent file reads.' },
+              { value: 'write_file',        label: 'write_file',        description: 'Prevent all file writes.' },
+              { value: 'search_replace',    label: 'search_replace',    description: 'Prevent in-place edits.' },
+              { value: 'grep',              label: 'grep',              description: 'Prevent pattern search.' },
+              { value: 'ask_user_question', label: 'ask_user_question', description: 'Prevent HITL interruptions (use in fully autonomous modes only).' },
+              { value: 'task',              label: 'task',              description: 'Prevent subagent delegation.' }
+            ]
+          }
         }
       ]
     },

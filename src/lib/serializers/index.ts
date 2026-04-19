@@ -4,10 +4,21 @@ export class TOMLSerializer {
   static serialize(config: AgentConfigState): string {
     let toml = '';
     
+    // --- [metadata] block ---
+    if (config.agent_type) toml += `agent_type = "${config.agent_type}"\n`;
+
+    // --- [safety] block ---
+    if (config.safety_level) toml += `safety_level = "${config.safety_level}"\n`;
+
+    // --- [config] block ---
+    // model_name maps to active_model in TOML
     if (config.model_name) toml += `active_model = "${config.model_name}"\n`;
     if (config.system_prompt_id) toml += `system_prompt_id = "${config.system_prompt_id}"\n`;
     
-    if (config.disabled_tools && config.disabled_tools.length > 0) {
+    // --- Tool lists: Whitelist-Takes-Precedence ---
+    if (config.enabled_tools && config.enabled_tools.length > 0) {
+      toml += `enabled_tools = [${config.enabled_tools.map(t => `"${t}"`).join(', ')}]\n`;
+    } else if (config.disabled_tools && config.disabled_tools.length > 0) {
       toml += `disabled_tools = [${config.disabled_tools.map(t => `"${t}"`).join(', ')}]\n`;
     }
 

@@ -190,7 +190,8 @@ export interface ValidationWarning {
 export interface AgentConfigState {
   agent_name: string | null;
   agent_purpose: string | null;
-  agent_type: 'general-purpose' | 'explore' | 'code-reviewer' | 'agentic-software-engineer' | null;
+  agent_type: 'AGENT' | 'SUBAGENT' | null;
+  safety_level: 'SAFE' | 'NEUTRAL' | 'DESTRUCTIVE' | 'YOLO' | null;
   agent_version: string | null;
   model_provider: ModelProviderType | null;
   model_name: string | null;
