@@ -3,12 +3,16 @@ import { VibeWorkspace, WorkbenchModelSettings } from '../../types';
 const STORAGE_KEY = 'vibe_workspace_state';
 const API_KEYS_KEY = 'vibe_api_keys';
 
+const isBrowser = typeof window !== 'undefined' && typeof sessionStorage !== 'undefined';
+
 export class WorkspaceManager {
   static save(workspace: VibeWorkspace) {
+    if (!isBrowser) return;
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
   }
 
   static load(): VibeWorkspace | null {
+    if (!isBrowser) return null;
     const data = sessionStorage.getItem(STORAGE_KEY);
     if (!data) return null;
     
@@ -27,10 +31,12 @@ export class WorkspaceManager {
   }
 
   static clear() {
+    if (!isBrowser) return;
     sessionStorage.removeItem(STORAGE_KEY);
   }
 
   static saveAPIKey(provider: string, key: string) {
+    if (!isBrowser) return;
     const keys = this.getAPIKeys();
     keys[provider] = key;
     sessionStorage.setItem(API_KEYS_KEY, JSON.stringify(keys));
@@ -42,6 +48,7 @@ export class WorkspaceManager {
   }
 
   static getAPIKeys(): Record<string, string> {
+      if (!isBrowser) return {};
       const data = sessionStorage.getItem(API_KEYS_KEY);
       if (!data) return {};
       try {
@@ -52,36 +59,25 @@ export class WorkspaceManager {
   }
 
   static clearAPIKeys() {
+      if (!isBrowser) return;
       sessionStorage.removeItem(API_KEYS_KEY);
   }
 
   static saveModelSettings(settings: WorkbenchModelSettings): void {
+    if (!isBrowser || typeof localStorage === 'undefined') return;
     const toSave = { phase_models: settings.phase_models };
     localStorage.setItem('vibe_model_settings', JSON.stringify(toSave));
   }
 
   static loadModelSettings(): { phase_models: WorkbenchModelSettings['phase_models'] } | null {
+    if (!isBrowser || typeof localStorage === 'undefined') return null;
     const raw = localStorage.getItem('vibe_model_settings');
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
   }
 
   static getAllAPIKeys(): Record<string, string> {
-    // If we're using the single-key approach:
     return this.getAPIKeys();
-    
-    /* 
-    // If we were using the multi-key approach from the prompt:
-    const keys: Record<string, string> = {}
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const k = sessionStorage.key(i)
-      if (k?.startsWith('vibe_api_key_')) {
-        const providerId = k.replace('vibe_api_key_', '')
-        keys[providerId] = sessionStorage.getItem(k) || ''
-      }
-    }
-    return keys 
-    */
   }
 
   static exportAsJSON(workspace: VibeWorkspace): string {

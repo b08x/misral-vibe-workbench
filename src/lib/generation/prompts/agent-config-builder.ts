@@ -16,179 +16,189 @@ export function buildAgentConfigPrompt(
 
   if (phase === 'context_gathering') {
     return {
-      system: `You are an expert system architect performing the CONTEXT_GATHERING phase for a mistral-vibe agent configuration.
+      system: `You are an expert system architect performing the CONTEXT_GATHERING phase
+for a Mistral Vibe agent configuration.
 
-PURPOSE: Ground the generation in the provided user requirements. Catalog all constraints and configuration parameters exactly as requested. Do not speculate or assign defaults unless the user explicitly requested them.
+PURPOSE: Ground the generation in the provided user requirements. Catalog
+all configuration parameters exactly as provided. Do not speculate. Do not
+assign defaults unless the user explicitly requested them. Record
+"NOT_SPECIFIED" for every field the user did not address.
 
+TARGET SCHEMA: The output artifact is an agent.toml using four namespaces:
+  [metadata]           — identity layer consumed by AgentManager
+  [safety]             — risk profile and HITL gate
+  [config]             — runtime VibeConfig overrides
+  [config.tools.*]     — per-tool granular permission blocks
+
+UGCS DIMENSION DIRECTIVES — CONTEXT_GATHERING PHASE:
 ${dimensionDirectives}
 
-CATALOG GOALS — extract and record each of the following from user answers:
+CATALOG GOALS — extract and record each of the following from user answers,
+organized by target namespace:
 
-1. CORE IDENTITY
-   - agent name (string, will become TOML [agent].name)
-   - agent type (one of: general-purpose | explore | code-reviewer | agentic-software-engineer)
-   - version string if specified (default "1.0.0" if not mentioned)
+GOAL 1 — [metadata] NAMESPACE KEYS
+  display_name      String    Human-readable UI name for the agent.
+  description       String    Functional summary of the agent's purpose.
+  agent_type        Enum      Must be: AGENT | SUBAGENT
+                              - AGENT: user-selectable via --agent flag or UI cycle
+                              - SUBAGENT: programmatic delegation only via task tool;
+                                cannot be selected at CLI
+  install_required  Boolean   If true, agent is hidden until /leaninstall trigger.
+                              Default false if not specified.
 
-2. CAPABILITIES FLAGS
-   - read access: boolean
-   - write access: boolean
-   - bash/shell access: boolean
-   - web fetch/search access: boolean
-   - vision/image analysis: boolean
+GOAL 2 — [safety] NAMESPACE KEYS
+  level             Enum      Must be: SAFE | NEUTRAL | DESTRUCTIVE | YOLO
+                              - SAFE: read-only, no write or destructive ops
+                              - NEUTRAL: standard HITL gate, ASK for modifications
+                              - DESTRUCTIVE: file writes auto-approved, bash gated
+                              - YOLO: all tool executions auto-approved (CI/CD only)
+                              Catalog the safety posture the user requested.
 
-3. CONTEXT & SAMPLING
-   - max_tokens (integer)
-   - temperature (float)
-   - top_p (float)
+GOAL 3 — [config] NAMESPACE KEYS
+  active_model      String    LLM backend routing. e.g. "mistral-large-latest"
+  system_prompt_id  String    References a .md template in prompts/ directory.
+                              e.g. "cli", "explore". Record verbatim.
+  auto_approve      Boolean   Bypasses HITL _approval_lock.
+                              CRITICAL: record this accurately. true = significant
+                              system risk increase. Default false.
+  enabled_tools     Array     String array of tool names to whitelist.
+                              WHITELIST-TAKES-PRECEDENCE: if non-empty, all tools
+                              not listed are disabled.
+  disabled_tools    Array     String array of tool names to blacklist.
+                              Only relevant if enabled_tools is empty.
+                              Do NOT catalog both populated simultaneously —
+                              flag as conflict if user specified both.
 
-4. TOOL PERMISSIONS
-   - allowed tools array (from agent.tools.allowed)
-   - per-tool permission levels (always | ask | deny)
-   - per-tool timeout values if specified
-   - per-tool allowlist/denylist paths if specified
+GOAL 4 — [config.tools.<tool_name>] NAMESPACE KEYS
+  For each tool the user flagged for non-default behavior, catalog:
+    tool_name       String    The exact tool identifier (e.g. "bash", "write_file")
+    permission      Enum      Must be: ALWAYS | NEVER | ASK
+    allowlist       Array     Glob patterns for path-based restrictions.
+                              e.g. ["plans/*", "reports/*.md"]
+                              Record verbatim. Do not expand or interpret globs.
 
-5. SAFETY & GUARDRAILS
-   - require_confirmation (boolean)
-   - allow_destructive (boolean)
-   - sandbox_mode (boolean)
-   - allowed_dirs array (empty = unrestricted)
+  HALLUCINATION GUARD: Only catalog [config.tools.*] entries for tools the
+  user explicitly named. If the user mentioned no tool-level overrides,
+  record: "tool_overrides: none"
 
-6. OUTPUT FORMATTING
-   - format (markdown | json | plain)
-   - verbose (boolean)
-   - show_thinking (boolean)
-
-7. MCP SERVER INTEGRATIONS — CATALOG WITH EXTREME CARE
-   - List only server names the user explicitly confirmed
-   - For each: command, args array, env vars
-   - If none confirmed: record "mcp_servers: none"
-
-8. RUNTIME ENVIRONMENT
-   - LLM_API_KEY env var name (not the key value)
-   - LLM_MODEL identifier string
-   - LLM_BASE_URL if custom endpoint
-   - PROJECT_ROOT (default ".")
-   - PROJECT_TYPE (ruby | python | typescript | other)
-   - DEBUG flag
-   - VERBOSE flag
-
-9. SESSION PERSISTENCE
-   - persist (boolean)
-   - storage_path (string)
-   - max_history (integer)
-   - checkpoint enabled (boolean)
-   - checkpoint interval (integer, turns)
-
-10. TEMPLATE INHERITANCE
-    - extends field: path to base template if user specified one
-
-CRITICAL: Record "NOT_SPECIFIED" for any field the user did not address. Do not fill gaps with assumptions. Those will be resolved in drafting with documented defaults.`,
+CRITICAL OUTPUT RULES:
+- Output as a structured JSON object with keys: metadata, safety, config, tool_overrides
+- Record "NOT_SPECIFIED" for any field the user did not address
+- Do not fill gaps with assumptions
+- If a user provided an invalid enum value (e.g. safety level "STRICT"), flag it:
+  { "level": "INVALID: 'STRICT' — must be SAFE | NEUTRAL | DESTRUCTIVE | YOLO" }`,
       
       user: `ENTITY TYPE: agent
+TARGET NAMESPACES: [metadata] [safety] [config] [config.tools.*]
+
 USER ANSWERS:
 ${JSON.stringify(workspace.session.answers, null, 2)}
 
-Catalog all agent configuration requirements following the 10-goal structure above. Output as a structured JSON object with keys matching each goal section.`
+Catalog all agent configuration requirements following the 4-goal namespace
+structure above. Output as a structured JSON object with keys:
+  metadata, safety, config, tool_overrides`
     };
   }
 
   if (phase === 'drafting') {
-    const skeletonPrompt = workspace.generation.skeletonConstraints 
+    const skeletonPrompt = workspace.generation.skeletonConstraints
       ? `\nSTRUCTURAL CONSTRAINTS (user-approved component plan — follow exactly):\n${workspace.generation.skeletonConstraints}\n\nGenerate the artifact with this exact section structure. Do not add, remove, or reorder sections.\n`
       : '';
 
     return {
-      system: `You are generating a mistral-vibe agent configuration file during the DRAFTING phase.
-The output format is TOML, following the agent-template.md schema exactly.
-${skeletonPrompt}
-PURPOSE: Synthesize the cataloged context into a complete, valid TOML artifact.
+      system: `You are generating a Mistral Vibe agent configuration file during the DRAFTING phase.
+The output format is TOML using the canonical four-namespace schema.
 
+${skeletonPrompt}
+
+PURPOSE: Synthesize the cataloged context map into a complete, valid TOML artifact.
+Do not invent keys. Do not add sections outside the four namespaces.
+Do not emit any section not present in the approved component plan.
+
+UGCS DIMENSION DIRECTIVES — DRAFTING PHASE:
 ${dimensionDirectives}
 
-STRUCTURAL SCHEMA — follow this section order exactly:
+STRUCTURAL SCHEMA — emit sections in this exact order:
 
-SECTION 1 — [agent] Core Identity
-  name = "<string>"          # Agent display name from catalog
-  type = "<enum>"            # general-purpose | explore | code-reviewer | agentic-software-engineer
-  version = "<semver>"       # Default "1.0.0" if NOT_SPECIFIED
+──────────────────────────────────────────────────────────
+SECTION 1 — [metadata]    REQUIRED
+──────────────────────────────────────────────────────────
+[metadata]
+display_name = "<string>"    # Human-readable name for terminal UI and logs
+description  = "<string>"    # Functional summary for AgentManager categorization
+agent_type   = "<enum>"      # AGENT | SUBAGENT
+install_required = <bool>    # Default: false if NOT_SPECIFIED
 
-SECTION 2 — [agent.capabilities]
-  read = <bool>
-  write = <bool>
-  bash = <bool>
-  web = <bool>
-  vision = <bool>
-  # Omit any capability cataloged as NOT_SPECIFIED (use false as implicit default,
-  # but do not emit it — let mistral-vibe use its own defaults for unspecified caps)
+  AGENT vs SUBAGENT semantics (emit as a comment above agent_type):
+  # AGENT: user-selectable via --agent flag or interactive cycle
+  # SUBAGENT: programmatic delegation only — cannot be selected at CLI
 
-SECTION 3 — [agent.context]
-  max_tokens = <int>         # Default 128000 if NOT_SPECIFIED
-  temperature = <float>      # Default 0.7 if NOT_SPECIFIED
-  top_p = <float>            # Default 0.9 if NOT_SPECIFIED
+──────────────────────────────────────────────────────────
+SECTION 2 — [safety]    REQUIRED
+──────────────────────────────────────────────────────────
+[safety]
+level = "<enum>"    # SAFE | NEUTRAL | DESTRUCTIVE | YOLO
 
-SECTION 4 — [agent.tools]
-  allowed = [
-    "<tool_name>",           # Only tools from the verified tool name list:
-    ...                      # bash, read_file, write_file, search_replace,
-  ]                          # grep, ask_user_question, webfetch, websearch,
-                             # codesearch, context7_query-docs,
-                             # context7_resolve-library-id
+  Emit a single inline comment describing the HITL behavior for the chosen level:
+  # SAFE        → read-only; no write or destructive operations permitted
+  # NEUTRAL     → standard HITL gate; system modifications require explicit ASK
+  # DESTRUCTIVE → file writes auto-approved; bash and system commands remain gated
+  # YOLO        → all tool executions auto-approved; intended for headless CI/CD only
 
-SECTION 5 — [agent.safety]
-  require_confirmation = <bool>   # Default true
-  allow_destructive = <bool>      # Default false
-  sandbox_mode = <bool>           # Default false
-  allowed_dirs = [<strings>]      # Empty array = unrestricted
+──────────────────────────────────────────────────────────
+SECTION 3 — [config]    REQUIRED
+──────────────────────────────────────────────────────────
+[config]
+active_model     = "<string>"   # LLM backend identifier
+system_prompt_id = "<string>"   # Filename stem in prompts/ directory
+auto_approve     = <bool>       # Bypasses HITL _approval_lock;
+                                # MiddlewarePipeline (TurnLimit, PriceLimit) remains active
+enabled_tools = [               # Whitelist-Takes-Precedence:
+  "<tool>",                     # if non-empty, unlisted tools are disabled
+  ...
+]
+# disabled_tools: emit ONLY if enabled_tools is empty AND user specified blacklist
+# disabled_tools = ["<tool>", ...]
 
-SECTION 6 — [agent.output]
-  format = "<enum>"          # markdown | json | plain
-  verbose = <bool>
-  show_thinking = <bool>
+  DEFAULT RULES (emit only if catalog value is NOT_SPECIFIED):
+  active_model     → "mistral-large-latest"
+  system_prompt_id → "cli"
+  auto_approve     → false
+  enabled_tools    → [] (empty array; all tools available per safety level default)
 
-SECTION 7 — [mcp.servers.*] — CONDITIONAL: EMIT ONLY IF CATALOG HAS CONFIRMED SERVERS
-  !! HALLUCINATION GUARD: Do NOT generate any [mcp.servers.*] block
-     unless the server name appears verbatim in the context catalog
-     under "MCP SERVER INTEGRATIONS". If catalog says "mcp_servers: none",
-     omit this entire section with no comment. !!
+──────────────────────────────────────────────────────────
+SECTION 4 — [config.tools.<tool_name>]    CONDITIONAL
+──────────────────────────────────────────────────────────
+Emit one block per tool in tool_overrides catalog.
+If tool_overrides is "none", omit this section entirely — do not emit an empty block.
 
-  [mcp.servers.<name>]
-  enabled = true
-  command = "<string>"
-  args = ["<arg>", ...]
-  env = { <KEY> = "<value>" }
+[config.tools.<tool_name>]
+permission = "<enum>"       # ALWAYS | NEVER | ASK
+                            # Overrides the safety-level default for this tool only
+allowlist  = ["<glob>"]     # Path-based restriction. Omit if NOT_SPECIFIED.
+                            # Example: ["reports/*"] restricts write_file to reports/
 
-SECTION 8 — [env]
-  LLM_API_KEY = "<env_var_name_only — never the actual key>"
-  LLM_MODEL = "<model_id>"
-  LLM_BASE_URL = "<url_or_omit_if_NOT_SPECIFIED>"
-  PROJECT_ROOT = "<path>"    # Default "."
-  PROJECT_TYPE = "<lang>"
-  DEBUG = <bool>
-  VERBOSE = <bool>
+  HALLUCINATION GUARD: Do NOT emit a [config.tools.*] block for any tool
+  not present in the tool_overrides section of the context catalog.
+  Inventing tool permission blocks is a critical failure mode.
 
-SECTION 9 — [session]
-  persist = <bool>
-  storage_path = "<path>"    # Default ".vibe/sessions"
-  max_history = <int>        # Default 100
-
-  [session.checkpoint]
-  enabled = <bool>
-  interval = <int>           # turns between checkpoints
-
-TEMPLATE INHERITANCE (emit only if catalog has a non-null "extends" value):
-  extends = "<path>"
-
+──────────────────────────────────────────────────────────
 EMIT RULES:
-- Output valid TOML only. No markdown fences. No explanations outside of # comments.
-- Comments: factual and descriptive only. No advocacy, no metaphors.
-- Sections with all NOT_SPECIFIED fields: emit with documented defaults and a
-  # Default applied — user did not specify comment on the section header line.
-- Preserve section order exactly as listed above.`,
-      
+- Output valid TOML only. No markdown fences. No explanations outside # comments.
+- Comments must be factual and descriptive. No metaphors. No advocacy.
+- Sections with all NOT_SPECIFIED values: emit with documented defaults and a
+  # Default applied — user did not specify
+  comment on the section header line.
+- Section order is fixed: [metadata] → [safety] → [config] → [config.tools.*]
+- Do not emit [config.tools.*] blocks that were not in the approved skeleton plan.`,
+
       user: `CONTEXT CATALOG:
 ${JSON.stringify(workspace.generation.contextMap, null, 2)}
 
-Generate the agent.toml file now.`
+${skeletonPrompt}
+
+Generate the agent.toml file now.
+Output TOML only — no preamble, no explanation, no markdown code fences.`
     };
   }
 
@@ -196,59 +206,81 @@ Generate the agent.toml file now.`
   return {
     system: `You are performing the REVIEW phase for a generated agent.toml configuration.
 
-PURPOSE: Validate syntax, check dimension compliance, audit for failure modes,
-and return either the corrected artifact or the original verbatim if no issues found.
+PURPOSE: Validate syntax, audit schema compliance, check for hallucinated
+tool blocks, and return either the corrected artifact or the original
+verbatim if no issues are found.
 
+UGCS DIMENSION DIRECTIVES — REVIEW PHASE:
 ${dimensionDirectives}
 
 VALIDATION CHECKLIST — audit each item, mark PASS or FAIL:
 
 SYNTAX:
   [ ] TOML parses without errors
-  [ ] No duplicate keys
+  [ ] No duplicate section headers
   [ ] All string values properly quoted
   [ ] All boolean values are true/false (not "true"/"false")
   [ ] All arrays use proper TOML array syntax
 
-SCHEMA COMPLIANCE:
-  [ ] agent.type is one of: general-purpose | explore | code-reviewer | agentic-software-engineer
-  [ ] agent.output.format is one of: markdown | json | plain
-  [ ] agent.context.temperature is float between 0.0 and 2.0
-  [ ] agent.context.top_p is float between 0.0 and 1.0
-  [ ] All tool names in agent.tools.allowed are from the verified list
-  [ ] agent.safety.allowed_dirs is an array (not a string)
-  [ ] session.storage_path is present if session.persist = true
+SCHEMA COMPLIANCE — [metadata]:
+  [ ] display_name is a non-empty string
+  [ ] description is a non-empty string
+  [ ] agent_type is exactly: AGENT | SUBAGENT (case-sensitive)
+  [ ] install_required is a boolean
 
-MCP HALLUCINATION AUDIT — HIGHEST PRIORITY CHECK:
-  [ ] Every [mcp.servers.<name>] block has a traceable confirmed server name
-      from the user's Q&A answers
-  [ ] No server command or args were invented — all values came from catalog
-  [ ] If catalog said "mcp_servers: none" — no MCP sections exist in output
+SCHEMA COMPLIANCE — [safety]:
+  [ ] level is exactly one of: SAFE | NEUTRAL | DESTRUCTIVE | YOLO (case-sensitive)
 
-DIMENSION COMPLIANCE:
-  [ ] Abstraction Level: NONE — all values are concrete literals, no placeholders
-  [ ] Imagery Density: NONE — comments are factual, no metaphors
-  [ ] Novelty Injection: NONE — no invented sections, no non-standard keys
-  [ ] Constraint Adherence: STRICT — all validation rules satisfied
+SCHEMA COMPLIANCE — [config]:
+  [ ] active_model is a non-empty string
+  [ ] system_prompt_id is a non-empty string
+  [ ] auto_approve is a boolean (not a string)
+  [ ] enabled_tools is an array of strings (may be empty)
+  [ ] disabled_tools is NOT present if enabled_tools is non-empty
+      (Whitelist-Takes-Precedence rule: co-presence is a conflict)
 
-SRE FAILURE MODE SCAN:
-  [ ] Hard Boundary Enforcement: no vague permission values (must be always|ask|deny)
-  [ ] Split-Brain: section structure is consistent, no duplicate config paths
-  [ ] Self-Revision Loop: output does not discuss or describe itself
+SCHEMA COMPLIANCE — [config.tools.*]:
+  [ ] permission is exactly one of: ALWAYS | NEVER | ASK (case-sensitive)
+  [ ] allowlist is an array of strings if present (not a single string)
+  [ ] Each tool block header uses valid TOML dotted key syntax:
+      [config.tools.bash] not [config][tools][bash]
+
+HALLUCINATION AUDIT — HIGHEST PRIORITY:
+  [ ] Every [config.tools.<n>] block has a matching entry in USER REQUIREMENTS
+      tool_overrides section
+  [ ] No tool block was invented that the user did not mention
+  [ ] If tool_overrides was "none" in the catalog — zero [config.tools.*]
+      blocks exist in the artifact
+
+SECTION ORDER AUDIT:
+  [ ] [metadata] appears first
+  [ ] [safety] appears second
+  [ ] [config] appears third
+  [ ] [config.tools.*] blocks appear last
+
+ORPHANED SECTIONS AUDIT:
+  [ ] No [agent] section (belongs to different schema)
+  [ ] No [agent.capabilities] section (belongs to different schema)
+  [ ] No [agent.context] section (belongs to different schema)
+  [ ] No [env] section (belongs to companion agent.toml — not this artifact)
+  [ ] No [session] section (belongs to companion agent.toml — not this artifact)
+  [ ] No [mcp.servers.*] section (belongs to companion agent.toml — not this artifact)
 
 IF ANY ITEM IS FAIL:
   Correct the artifact. Return the full corrected TOML.
+  Do not explain what you changed.
 
-IF ALL ITEMS ARE PASS:
-  Return the original content verbatim. Do not alter formatting or add comments.
+IF ALL ITEMS PASS:
+  Return the original content verbatim.
+  Do not alter formatting. Do not add comments.
 
-Do NOT explain what you checked. Do NOT add preamble. Output ONLY the TOML.`,
-    
+Do NOT add preamble. Output ONLY the TOML.`,
+
     user: `DRAFT ARTIFACT:
 ${draft}
 
-USER REQUIREMENTS:
-${JSON.stringify(workspace.session.answers, null, 2)}
+USER REQUIREMENTS (context catalog):
+${JSON.stringify(workspace.generation.contextMap, null, 2)}
 
 Perform the review and return the final valid TOML content.`
   };

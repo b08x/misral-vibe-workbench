@@ -120,7 +120,7 @@ export class OpenRouterProvider extends ModelProvider {
     const client = createOpenRouter({ 
       apiKey,
       headers: {
-        'HTTP-Referer': window.location.origin,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://mistral-vibe-workbench.internal',
         'X-Title': 'Mistral-Vibe Workbench'
       }
     });

@@ -66,13 +66,24 @@ export class SkeletonOrchestrator {
       );
     }
 
-    // Assign stable UUIDs to all sections and ensure order is set
-    preview.sections = preview.sections.map((section, index) => ({
-      ...section,
-      id: section.id || crypto.randomUUID(),
-      order: typeof section.order === 'number' ? section.order : index,
-      editable: typeof section.editable === 'boolean' ? section.editable : true
-    }));
+    // Assign stable IDs to all sections and ensure order is set
+    preview.sections = preview.sections.map((section, index) => {
+      let id = section.id;
+      if (!id) {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+          id = crypto.randomUUID();
+        } else {
+          id = `section-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        }
+      }
+      
+      return {
+        ...section,
+        id,
+        order: typeof section.order === 'number' ? section.order : index,
+        editable: typeof section.editable === 'boolean' ? section.editable : true
+      };
+    });
 
     // Sort by order initially
     preview.sections.sort((a, b) => a.order - b.order);
