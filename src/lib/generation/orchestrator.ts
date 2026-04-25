@@ -57,7 +57,7 @@ export class GenerationOrchestrator {
 
       return provider.generate(prompt, config.model, apiKey, { 
         temperature: config.temperature,
-        maxTokens: maxTokens || 2048 // Robust default for configs
+        maxTokens: maxTokens || 1536 // Lower default for better credit compatibility
       });
     };
 

@@ -76,6 +76,8 @@ export const GenerationView: React.FC = () => {
     return phaseIdx < currentIdx ? 'complete' : 'pending';
   };
 
+  const isCreditError = error?.includes('credits') || error?.includes('insufficient_balance') || error?.includes('limit');
+
   return (
     <div className="max-w-4xl mx-auto py-20 px-6">
       <div className="text-center mb-16">
@@ -92,18 +94,70 @@ export const GenerationView: React.FC = () => {
       </div>
 
       {error && (
-        <Alert variant="destructive" className="mb-12 border-destructive/50 bg-destructive/5">
-          <ShieldAlert className="w-4 h-4" />
-          <AlertTitle className="font-mono font-bold uppercase tracking-widest">Generation Inhibited</AlertTitle>
-          <AlertDescription>
-            {error}
-            <div className="mt-4">
-              <Button size="sm" variant="outline" onClick={() => updateWorkspace({ meta: { ...workspace.meta, status: 'review' } })} className="font-mono text-[10px]">
-                REVERT_TO_REVIEW
-              </Button>
+        <div className="mb-12 animate-in zoom-in-95 duration-500">
+          <Card className={cn(
+            "border-2 overflow-hidden shadow-2xl transition-all duration-700",
+            isCreditError ? "border-amber-500/50 bg-amber-500/5" : "border-destructive/50 bg-destructive/5"
+          )}>
+            <div className={cn(
+              "p-6 flex items-start gap-4",
+              isCreditError ? "bg-amber-500/10" : "bg-destructive/10"
+            )}>
+              <div className={cn(
+                "p-3 rounded-lg border-2",
+                isCreditError ? "border-amber-500/30 text-amber-500 bg-amber-500/10" : "border-destructive/30 text-destructive bg-destructive/10"
+              )}>
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <div className="flex-1">
+                <h3 className={cn(
+                  "text-xl font-black uppercase tracking-tighter mb-1",
+                  isCreditError ? "text-amber-500" : "text-destructive"
+                )}>
+                  {isCreditError ? "Resource Exhaustion" : "Generation Inhibited"}
+                </h3>
+                <p className="text-xs font-mono text-text-main/80 font-bold mb-4 uppercase tracking-widest leading-relaxed">
+                  System state: {isCreditError ? "Insufficient provider fuel" : "Critical synchronization failure"}
+                </p>
+                <div className="p-4 bg-bg-deep rounded border border-white/5 font-mono text-[11px] text-text-dim leading-relaxed mb-6 break-words shadow-inner">
+                  {error}
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => updateWorkspace({ meta: { ...workspace.meta, status: 'review' } })} 
+                    className="font-mono text-[10px] h-10 px-6 border-[#28282b] hover:bg-bg-elevated transition-colors"
+                  >
+                    REVERT_TO_REVIEW
+                  </Button>
+                  {isCreditError && (
+                    <Button 
+                      onClick={() => window.open('https://openrouter.ai/settings/keys', '_blank')}
+                      className="font-black text-[10px] tracking-widest h-10 px-6 bg-amber-500 hover:bg-amber-600 text-black shadow-lg shadow-amber-500/20"
+                    >
+                      RECHARGE_CREDITS_EXTERNAL <ArrowRight className="w-3.5 h-3.5 ml-2" />
+                    </Button>
+                  )}
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => window.location.reload()} 
+                    className="font-mono text-[10px] h-10 px-6 text-text-dim hover:text-text-main"
+                  >
+                    RETRY_SYSTEM_FLOW
+                  </Button>
+                </div>
+              </div>
             </div>
-          </AlertDescription>
-        </Alert>
+            {isCreditError && (
+              <div className="px-6 py-3 bg-amber-500/20 border-t border-amber-500/20 flex items-center justify-between">
+                <span className="text-[9px] font-mono text-amber-500/80 font-bold uppercase tracking-widest italic flex items-center gap-2">
+                   <Zap className="w-3 h-3" /> Note: High-intelligence models require sufficient credit balance on OpenRouter.
+                </span>
+                <span className="text-[9px] font-mono text-amber-500/50">EC-402</span>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {/* THREE-PHASE BOARD */}

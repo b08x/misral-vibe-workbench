@@ -24,14 +24,16 @@ export abstract class ModelProvider {
     const startTime = Date.now();
     const model = this.getModel(modelId, apiKey);
     
+    const maxTokens = Math.min(options.maxTokens ?? 4096, 32768); // Strict cap to avoid credit issues
+    
     const { text, usage } = await generateText({
       model,
       system: prompt.system,
       prompt: prompt.user,
       temperature: options.temperature ?? 0.2,
-      maxTokens: options.maxTokens ?? 4096,
+      max_tokens: maxTokens,
       maxRetries: 5,
-    });
+    } as any);
 
     return {
       content: text,
